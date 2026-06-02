@@ -1,6 +1,6 @@
 # MPC CMP: Threshold ECDSA Explained
 
-> Based on: *UC Non-Interactive, Proactive, Threshold ECDSA* (Canetti, Makriyannis, Peled — 2020/492)  
+> Based on: [*UC Non-Interactive, Proactive, Threshold ECDSA*](https://eprint.iacr.org/2020/492.pdf) (Canetti, Makriyannis, Peled — 2020/492)  
 > Implementation: [Fireblocks mpc-lib](https://github.com/fireblocks/mpc-lib)
 
 ---
