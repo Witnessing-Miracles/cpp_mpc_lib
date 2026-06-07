@@ -30,6 +30,25 @@ using namespace std;
 class ThreadPool
 {
 public:
+    /**
+     * 参数: min 表示线程池中的最小线程数量, max 表示最大线程数量
+     * 函数参数的默认值从右向左给予 (本机CPU4核, 通过Intel超线程技术, 让每个物理核心能高效处理两个任务
+     * 从而在系统中显示出8个逻辑处理器即最大线程支持数为8)
+     */
+    // thread 类中的 hardware_concurrency() 函数能计算出本机的最先线程支持数
+    ThreadPool(int min = 2, int max = 8 /* thread::hardware_concurrency() */);
+    ~ThreadPool();
+
+    /**
+     * 添加任务到任务队列
+     * 任务队列对应的也是容器, 里面存储的是可调用对象
+     */
+    void addTask(function<void(void)> task);
+
+private:
+    void manager(void);
+    void worker(void);
+
 private:
     thread* m_manager;
     vector<thread> m_workers;
