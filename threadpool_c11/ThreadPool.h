@@ -6,6 +6,7 @@
 #include <functional>
 #include <mutex>
 #include <condition_variable>
+#include <map>
 
 using namespace std;
 /**
@@ -51,15 +52,18 @@ private:
 
 private:
     thread* m_manager;
-    vector<thread> m_workers;
+    map<thread::id, thread> m_workers;
+    vector<thread::id> m_ids;       // 存储已经退出了任务函数的线程的ID
     atomic<int> m_minThread;
     atomic<int> m_maxThread;
     atomic<int> m_curThread;
     atomic<int> m_idleThread;
+    atomic<int> m_exitThread;
     atomic<bool> m_stop;
     
     // queue 里装的是可调用函数对象
     queue<function<void(void)>> m_tasks;
     mutex m_queueMutex;
+    mutex m_idsMutex;
     condition_variable m_condition;
 };
