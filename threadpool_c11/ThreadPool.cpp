@@ -2,7 +2,7 @@
 #include <iostream>
 
 ThreadPool::ThreadPool(int min, int max) : m_minThread(min), m_maxThread(max),
-m_stop(false), m_curThread(min), m_idleThread(min)
+m_stop(false), m_curThread(min), m_idleThread(min), m_exitThread(0)   // FIX: initialise m_exitThread
 {
     /**
      * 创建管理者线程
@@ -21,8 +21,25 @@ m_stop(false), m_curThread(min), m_idleThread(min)
     }
 }
 
+// FIX: destructor now shuts down all threads cleanly
 ThreadPool::~ThreadPool()
-{}
+{
+    m_stop.store(true);
+    m_condition.notify_all();
+
+    if (m_manager && m_manager->joinable())
+    {
+        m_manager->join();
+    }
+    delete m_manager;
+
+    for (auto& pair : m_workers)    // 记住, 线程对象不允许拷贝. 这里必须用引用
+    {
+        if (pair.second.joinable()) // joinable 用于判断当前线程是否可连接
+            cout << "------ 线程 " << pair.second.get_id() << " 将要退出了 ......" << endl;
+            pair.second.join();
+    }
+}
 
 /**
  * 任务队列是一块共享访问区域, 需要对线程访问进行同步
@@ -49,7 +66,7 @@ void ThreadPool::manager(void)
     while (!m_stop.load())
     {
         // 每3s检查一次线程池里面的线程数和空闲线程数之间的关系
-        this_thread::sleep_for(chrono::seconds(3));
+        this_thread::sleep_for(chrono::seconds(1));
         int idel = m_idleThread.load();
         int cur = m_curThread.load();
 
@@ -59,18 +76,28 @@ void ThreadPool::manager(void)
             // 每次销毁两个线程
             m_exitThread.store(2);      // 原子变量的标准赋值方法, 等同于 m_exitThread = 2 
             m_condition.notify_all();   // 唤醒所有阻塞在条件变量上的线程
-            lock_guard<mutex> lck(m_idsMutex);
-            for (auto id : m_ids)
+
+            // FIX: collect IDs to join, then release m_idsMutex before calling join()
+            // to avoid deadlock (worker needs m_idsMutex to push its own ID on exit)
+            vector<thread::id> toJoin;
+            {
+                lock_guard<mutex> lck(m_idsMutex);
+                toJoin = m_ids;
+                m_ids.clear();
+            }
+
+            for (auto id : toJoin)
             {
                 auto it = m_workers.find(id);
                 if (it != m_workers.end())
                 {
-                    (*it).second.join();    // 阻塞当前 manager 对应的线程 等待线程对象里面的任务执行完毕
+                    // FIX: save the ID before erase(); accessing (*it) after erase is UB
+                    thread::id tid = it->first;
+                    cout << "------ 被销毁的线程的ID是: " << tid << endl;
+                    it->second.join();    // 阻塞当前 manager 对应的线程 等待线程对象里面的任务执行完毕
                     m_workers.erase(it);    // 把线程对象从map移除 它就会被自动销毁
-                    cout << "------ 被销毁的线程的ID是: " << (*it).first << endl;
                 }
             }
-            m_ids.clear();
         }
         else if (idel == 0 && cur < m_maxThread)
         {
@@ -98,6 +125,7 @@ void ThreadPool::worker(void)
                 if (m_exitThread.load() > 0)
                 {
                     m_curThread--;
+                    m_idleThread--;
                     m_exitThread--;
                     cout << "------ 退出的线程ID为: " << this_thread::get_id() << endl;
                     lock_guard<mutex> lck(m_idsMutex);
@@ -117,6 +145,7 @@ void ThreadPool::worker(void)
                  * 确认拿走安全后，再用 pop() 物理切断、销毁底层节点
                  * move 只是搬空了箱子，pop 才是把箱子扔掉。两个必须组合使用，缺一不可！
                  */
+                cout << "取出了一个任务 ... " << endl;
                 task = move(m_tasks.front());     // 不使用 move 的话这段代码执行之后会发生一个拷贝
                 m_tasks.pop();      // 弹出已经被取出的任务
             }  // unique_lock 的存在只需要维持到每一次任务从队列取出
@@ -130,7 +159,31 @@ void ThreadPool::worker(void)
     }
 }
 
+void calc(int x, int y)
+{
+    int z = x + y;
+    cout << "z = " << z << endl;
+    this_thread::sleep_for(chrono::seconds(2));
+}
+
 int main()
 {
+    ThreadPool pool;
+    for (int i = 0; i < 10; ++i)
+    {
+        /**
+         * 现在提供的 calc 是带参的, 直接传递给 addTask 会有问题
+         * 由于少参数, 需要事先进行绑定. 可调用对象绑定器叫做 bind
+         */
+        
+        // bind 第一个参数是函数地址, 后面的参数是函数实参, 这里有两个, 分别给 i 和 i*2
+        auto obj = bind(calc, i, i*2);
+        
+        pool.addTask(obj);
+    }
+
+    // 阻塞主线程
+    this_thread::sleep_for(chrono::seconds(15));
+
     return 0;
 }

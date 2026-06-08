@@ -37,7 +37,7 @@ public:
      * 从而在系统中显示出8个逻辑处理器即最大线程支持数为8)
      */
     // thread 类中的 hardware_concurrency() 函数能计算出本机的最先线程支持数
-    ThreadPool(int min = 2, int max = 8 /* thread::hardware_concurrency() */);
+    ThreadPool(int min = 3, int max = thread::hardware_concurrency());
     ~ThreadPool();
 
     /**
@@ -58,7 +58,7 @@ private:
     atomic<int> m_maxThread;
     atomic<int> m_curThread;
     atomic<int> m_idleThread;
-    atomic<int> m_exitThread;
+    atomic<int> m_exitThread;       // FIX: initialised to 0 in ctor
     atomic<bool> m_stop;
     
     // queue 里装的是可调用函数对象
