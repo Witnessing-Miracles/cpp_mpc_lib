@@ -35,7 +35,7 @@ ThreadPool::~ThreadPool()
 
     for (auto& pair : m_workers)    // 记住, 线程对象不允许拷贝. 这里必须用引用
     {
-        if (pair.second.joinable()) // joinable 用于判断当前线程是否可连接
+        if (pair.second.joinable()) // joinable 用于判断当前线程是否可 join
             cout << "------ 线程 " << pair.second.get_id() << " 将要退出了 ......" << endl;
             pair.second.join();
     }
@@ -65,7 +65,7 @@ void ThreadPool::manager(void)
 {
     while (!m_stop.load())
     {
-        // 每3s检查一次线程池里面的线程数和空闲线程数之间的关系
+        // 每隔1s检查一次线程池里面的线程数和空闲线程数之间的关系
         this_thread::sleep_for(chrono::seconds(1));
         int idel = m_idleThread.load();
         int cur = m_curThread.load();
